@@ -1,0 +1,6 @@
+/.idea/
+/db.sqlite3
+/config/settings/local.py
+node_modules/
+static_compiled/
+/static_root/
