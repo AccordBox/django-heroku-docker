@@ -1,6 +1,7 @@
 /.idea/
 /db.sqlite3
-/config/settings/local.py
+local.py
 node_modules/
-static_compiled/
-/static_root/
+/venv/
+.DS_Store
+/media

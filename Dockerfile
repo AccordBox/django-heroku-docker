@@ -1,50 +1,56 @@
 # Please remember to rename django_heroku to your project directory name
-FROM python:3.6-stretch
+FROM node:14-stretch-slim as frontend-builder
+
+WORKDIR /app/frontend
+
+COPY ./frontend/package.json /app/frontend
+COPY ./frontend/package-lock.json /app/frontend
+
+ENV PATH ./node_modules/.bin/:$PATH
+
+RUN npm ci
+
+COPY ./frontend .
+
+RUN npm run build
+
+#################################################################################
+FROM python:3.10-slim-buster
 
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    DJANGO_SETTINGS_MODULE=config.settings.production \
+    DJANGO_SETTINGS_MODULE=django_heroku.settings \
     PORT=8000 \
     WEB_CONCURRENCY=3
 
-EXPOSE 8000
+# Install system packages required by Wagtail and Django.
+RUN apt-get update --yes --quiet && apt-get install --yes --quiet --no-install-recommends \
+    build-essential curl \
+    libpq-dev \
+    libmariadbclient-dev \
+    libjpeg62-turbo-dev \
+    zlib1g-dev \
+    libwebp-dev \
+ && rm -rf /var/lib/apt/lists/*
 
-# Install operating system dependencies.
-RUN apt-get update -y && \
-    apt-get install -y apt-transport-https rsync gettext libgettextpo-dev && \
-    curl -sL https://deb.nodesource.com/setup_8.x | bash - && \
-    apt-get install -y nodejs &&\
-    rm -rf /var/lib/apt/lists/*
+RUN addgroup --system django \
+    && adduser --system --ingroup django django
 
-# start to compile front-end stuff
-WORKDIR django_heroku/static_src
+# Requirements are installed here to ensure they will be cached.
+COPY ./requirements.txt /requirements.txt
+RUN pip install -r /requirements.txt
 
-# Install front-end dependencies.
-COPY ./django_heroku/static_src/package.json ./django_heroku/static_src/package-lock.json ./
-RUN npm install
-
-# Compile static files
-COPY ./django_heroku/static_src/ ./
-RUN npm run build:prod
-
-# Install Gunicorn.
-RUN pip install "gunicorn>=19.8,<19.9"
-
-# start to install backend-end stuff
-WORKDIR /app
-
-# Install Python requirements.
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-# Copy application code.
+# Copy project code
 COPY . .
+COPY --from=frontend-builder /app/frontend/build /app/frontend/build
 
-# Install assets
 RUN python manage.py collectstatic --noinput --clear
 
-# Run application
-CMD gunicorn config.wsgi:application
+# Run as non-root user
+RUN chown -R django:django /app
+USER django
 
+# Run application
+CMD gunicorn django_heroku.wsgi:application
