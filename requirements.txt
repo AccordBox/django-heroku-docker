@@ -1,4 +1,4 @@
-Django==4.0
+Django==4.0.6
 python-webpack-boilerplate==0.0.7
 django-environ==0.8.1
 gunicorn==20.1.0
